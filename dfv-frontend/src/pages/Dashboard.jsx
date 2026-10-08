@@ -1,3 +1,6 @@
+import Quiz from './Quiz'
+import AIAssistant from './AIAssistant'
+import Visualizations from './Visualizations'
 import Recommendations from './Recommendations'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +9,7 @@ import ConsentModal from '../components/ConsentModal'
 const navItems = [
   { icon: '📊', label: 'Overview', id: 'overview' },
   { icon: '📝', label: 'My Survey', id: 'survey' },
+  { icon: '📝', label: 'Awareness Quiz', id: 'quiz' },
   { icon: '🛡️', label: 'Risk Score', id: 'risk' },
   { icon: '📈', label: 'Visualizations', id: 'visualizations' },
   { icon: '💡', label: 'Recommendations', id: 'recommendations' },
@@ -14,14 +18,19 @@ const navItems = [
 ]
 
 export default function Dashboard() {
-  const [consentGiven, setConsentGiven] = useState(false)
-  const [showModal, setShowModal] = useState(true)
+  const [consentGiven, setConsentGiven] = useState(
+  localStorage.getItem('consentGiven') === 'true'
+  )
+  const [showModal, setShowModal] = useState(
+    localStorage.getItem('consentGiven') !== 'true'
+  )
   const [activePage, setActivePage] = useState('overview')
   const navigate = useNavigate()
 
   const handleAccept = () => {
-    setConsentGiven(true)
-    setShowModal(false)
+  localStorage.setItem('consentGiven', 'true')
+  setConsentGiven(true)
+  setShowModal(false)
   }
 
   const handleDecline = () => {
@@ -103,8 +112,11 @@ export default function Dashboard() {
 
             {/* Page content */}
             <div className="p-8">
-                {activePage === 'overview' && <OverviewPage />}
-                {activePage === 'recommendations' && (
+                {activePage === 'recommendations' && <Recommendations />}
+                {activePage === 'visualizations' && <Visualizations />}
+                {activePage === 'assistant' && <AIAssistant />}
+                {activePage === 'quiz' && <Quiz />}
+                {activePage !== 'overview' && activePage !== 'recommendations' && activePage !== 'visualizations' && activePage !== 'assistant' && activePage !== 'quiz' && (
                 <div>
                     <Recommendations />
                 </div>
