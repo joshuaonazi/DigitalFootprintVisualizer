@@ -1,3 +1,4 @@
+import MyReport from './MyReport'
 import Quiz from './Quiz'
 import AIAssistant from './AIAssistant'
 import Visualizations from './Visualizations'
@@ -67,7 +68,15 @@ export default function Dashboard() {
               {navItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setActivePage(item.id)}
+                  onClick={() => {
+                    if (item.id === 'survey') {
+                      window.location.href = '/survey'
+                    } else if (item.id === 'risk') {
+                      window.location.href = '/risk'
+                    } else {
+                      setActivePage(item.id)
+                    }
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-150
                     ${activePage === item.id
                       ? 'bg-violet-600 text-white'
@@ -112,23 +121,25 @@ export default function Dashboard() {
 
             {/* Page content */}
             <div className="p-8">
-                {activePage === 'recommendations' && <Recommendations />}
-                {activePage === 'visualizations' && <Visualizations />}
-                {activePage === 'assistant' && <AIAssistant />}
-                {activePage === 'quiz' && <Quiz />}
-                {activePage !== 'overview' && activePage !== 'recommendations' && activePage !== 'visualizations' && activePage !== 'assistant' && activePage !== 'quiz' && (
-                <div>
-                    <Recommendations />
-                </div>
-                )}
-                {activePage !== 'overview' && activePage !== 'recommendations' && (
+              {activePage === 'overview' && <OverviewPage />}
+              {activePage === 'recommendations' && <Recommendations />}
+              {activePage === 'visualizations' && <Visualizations />}
+              {activePage === 'assistant' && <AIAssistant />}
+              {activePage === 'quiz' && <Quiz />}
+              {activePage === 'report' && <MyReport />}
+              {activePage !== 'overview' &&
+              activePage !== 'recommendations' &&
+              activePage !== 'visualizations' &&
+              activePage !== 'assistant' &&
+              activePage !== 'quiz' && 
+              activePage !== 'report' && (
                 <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
+                  <div className="text-center">
                     <p className="text-4xl mb-3">🚧</p>
                     <p className="text-gray-400">This section is coming soon</p>
-                    </div>
+                  </div>
                 </div>
-                )}
+              )}
             </div>
           </main>
         </div>
@@ -138,18 +149,67 @@ export default function Dashboard() {
 }
 
 function OverviewPage() {
+  const riskResult = (() => {
+    try {
+      const stored = localStorage.getItem('riskResult')
+      return stored ? JSON.parse(stored) : null
+    } catch { return null }
+  })()
+
+  const quizScore = (() => {
+    try {
+      const stored = localStorage.getItem('quizScore')
+      return stored ? JSON.parse(stored) : null
+    } catch { return null }
+  })()
+
+  const tierColors = {
+    Low: 'text-emerald-400',
+    Medium: 'text-amber-400',
+    High: 'text-orange-400',
+    Critical: 'text-red-400',
+  }
+
   const stats = [
-    { label: 'Risk Score', value: '—', sub: 'Complete survey to calculate', color: 'violet' },
-    { label: 'Risk Tier', value: '—', sub: 'Not yet assessed', color: 'blue' },
-    { label: 'Recommendations', value: '—', sub: 'Pending analysis', color: 'emerald' },
-    { label: 'Awareness Score', value: '—', sub: 'Take the quiz to find out', color: 'amber' },
+    {
+      label: 'Risk Score',
+      value: riskResult ? riskResult.overallScore : '—',
+      sub: riskResult ? `${riskResult.riskTier} Risk Tier` : 'Complete survey to calculate',
+      color: riskResult ? tierColors[riskResult.riskTier] : 'text-white',
+    },
+    {
+      label: 'Highest Risk',
+      value: riskResult ? (() => {
+        const dims = riskResult.dimensions
+        const highest = Object.entries(dims).sort((a, b) => b[1].score - a[1].score)[0]
+        return highest[0].replace(/([A-Z])/g, ' $1').trim()
+      })() : '—',
+      sub: riskResult ? 'Your most exposed dimension' : 'Not yet assessed',
+      color: 'text-white',
+    },
+    {
+      label: 'Recommendations',
+      value: '6',
+      sub: riskResult ? 'Personalised actions available' : 'Complete survey first',
+      color: 'text-violet-400',
+    },
+    {
+      label: 'Awareness Score',
+      value: quizScore ? `${quizScore.percentage}%` : '—',
+      sub: quizScore ? `${quizScore.score}/${quizScore.total} correct` : 'Take the quiz to find out',
+      color: quizScore ? 'text-emerald-400' : 'text-white',
+    },
   ]
 
   return (
     <div>
       <div className="mb-8">
         <h3 className="text-white text-2xl font-bold mb-1">Your Privacy Overview</h3>
-        <p className="text-gray-400">Complete the survey to see your digital footprint analysis.</p>
+        <p className="text-gray-400">
+          {riskResult
+            ? 'Your digital footprint has been analysed. See your results below.'
+            : 'Complete the survey to see your digital footprint analysis.'}
+        </p>
       </div>
 
       {/* Stats grid */}
@@ -157,23 +217,37 @@ function OverviewPage() {
         {stats.map((stat, i) => (
           <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
             <p className="text-gray-500 text-sm mb-2">{stat.label}</p>
-            <p className="text-white text-4xl font-bold mb-1">{stat.value}</p>
+            <p className={`text-4xl font-bold mb-1 ${stat.color}`}>{stat.value}</p>
             <p className="text-gray-600 text-xs">{stat.sub}</p>
           </div>
         ))}
       </div>
 
+      {/* Risk summary if survey done */}
+      {riskResult && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-4">
+          <h4 className="text-white font-semibold mb-2">📋 AI Summary</h4>
+          <p className="text-gray-400 text-sm leading-relaxed">{riskResult.summary}</p>
+        </div>
+      )}
+
       {/* CTA */}
       <div className="bg-violet-600/10 border border-violet-500/30 rounded-2xl p-6 flex items-center justify-between">
         <div>
-          <h4 className="text-white font-semibold mb-1">Ready to see your footprint?</h4>
-          <p className="text-gray-400 text-sm">Take the 5-minute survey to get your full risk analysis.</p>
+          <h4 className="text-white font-semibold mb-1">
+            {riskResult ? 'View your full analysis' : 'Ready to see your footprint?'}
+          </h4>
+          <p className="text-gray-400 text-sm">
+            {riskResult
+              ? 'Explore your visualizations and recommendations.'
+              : 'Take the 5-minute survey to get your full risk analysis.'}
+          </p>
         </div>
         <button
-  onClick={() => window.location.href = '/survey'}
-  className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap ml-4"
->
-  Start Survey →
+          onClick={() => window.location.href = riskResult ? '/risk' : '/survey'}
+          className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap ml-4"
+        >
+          {riskResult ? 'View Results →' : 'Start Survey →'}
         </button>
       </div>
     </div>
