@@ -77,7 +77,7 @@ export default function Register() {
               />
             </div>
 
-            <div className="flex gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex-1">
                 <label className="text-gray-400 text-sm mb-1 block">Student ID</label>
                 <input

@@ -26,6 +26,7 @@ export default function Dashboard() {
     localStorage.getItem('consentGiven') !== 'true'
   )
   const [activePage, setActivePage] = useState('overview')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
 
   const handleAccept = () => {
@@ -46,10 +47,24 @@ export default function Dashboard() {
       )}
 
       {consentGiven && (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-dvh overflow-hidden">
+
+          {sidebarOpen && (
+            <button
+              type="button"
+              aria-label="Close navigation menu"
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-20 bg-black/60 md:hidden"
+            />
+          )}
 
           {/* Sidebar */}
-          <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
+          <aside
+            id="dashboard-sidebar"
+            className={`fixed inset-y-0 left-0 z-30 flex w-72 flex-col border-r border-gray-800 bg-gray-900 transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 md:visible ${
+              sidebarOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'
+            }`}
+          >
             {/* Logo */}
             <div className="p-6 border-b border-gray-800">
               <div className="flex items-center gap-3">
@@ -64,15 +79,16 @@ export default function Dashboard() {
             </div>
 
             {/* Nav Items */}
-            <nav className="flex-1 p-4 space-y-1">
+            <nav aria-label="Dashboard navigation" className="flex-1 p-4 space-y-1">
               {navItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => {
+                    setSidebarOpen(false)
                     if (item.id === 'survey') {
-                      window.location.href = '/survey'
+                      navigate('/survey')
                     } else if (item.id === 'risk') {
-                      window.location.href = '/risk'
+                      navigate('/risk')
                     } else {
                       setActivePage(item.id)
                     }
@@ -110,9 +126,19 @@ export default function Dashboard() {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-y-auto">
+          <main className="min-w-0 flex-1 overflow-y-auto">
             {/* Top bar */}
-            <div className="sticky top-0 z-10 bg-gray-950/80 backdrop-blur border-b border-gray-800 px-8 py-4">
+            <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-800 bg-gray-950/80 px-4 py-4 backdrop-blur md:px-8">
+              <button
+                type="button"
+                aria-label="Open navigation menu"
+                aria-controls="dashboard-sidebar"
+                aria-expanded={sidebarOpen}
+                onClick={() => setSidebarOpen(true)}
+                className="rounded-lg p-2 text-gray-300 hover:bg-gray-800 hover:text-white md:hidden"
+              >
+                <span aria-hidden="true">☰</span>
+              </button>
               <h2 className="text-white font-semibold text-lg capitalize">
                 {navItems.find(n => n.id === activePage)?.icon}{' '}
                 {navItems.find(n => n.id === activePage)?.label}
@@ -120,7 +146,7 @@ export default function Dashboard() {
             </div>
 
             {/* Page content */}
-            <div className="p-8">
+            <div className="p-4 sm:p-6 md:p-8">
               {activePage === 'overview' && <OverviewPage />}
               {activePage === 'recommendations' && <Recommendations />}
               {activePage === 'visualizations' && <Visualizations />}
@@ -213,7 +239,7 @@ function OverviewPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2">
         {stats.map((stat, i) => (
           <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
             <p className="text-gray-500 text-sm mb-2">{stat.label}</p>
@@ -232,7 +258,7 @@ function OverviewPage() {
       )}
 
       {/* CTA */}
-      <div className="bg-violet-600/10 border border-violet-500/30 rounded-2xl p-6 flex items-center justify-between">
+      <div className="bg-violet-600/10 border border-violet-500/30 rounded-2xl p-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-white font-semibold mb-1">
             {riskResult ? 'View your full analysis' : 'Ready to see your footprint?'}
@@ -245,7 +271,7 @@ function OverviewPage() {
         </div>
         <button
           onClick={() => window.location.href = riskResult ? '/risk' : '/survey'}
-          className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap ml-4"
+          className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors whitespace-nowrap sm:ml-4"
         >
           {riskResult ? 'View Results →' : 'Start Survey →'}
         </button>

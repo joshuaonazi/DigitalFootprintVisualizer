@@ -94,8 +94,8 @@ export default function AIAssistant() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 73px)' }}>
 
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-center justify-between">
+      <div className="px-4 pt-4 pb-4 border-b border-gray-800 flex-shrink-0 sm:px-6 sm:pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center">
               <span className="text-xl">🤖</span>
@@ -127,7 +127,7 @@ export default function AIAssistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 sm:px-6">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -177,7 +177,7 @@ export default function AIAssistant() {
 
       {/* Suggested Questions */}
       {messages.length <= 1 && (
-        <div className="px-6 pb-3 flex-shrink-0">
+        <div className="px-4 pb-3 flex-shrink-0 sm:px-6">
           <p className="text-gray-600 text-xs mb-2">Suggested questions:</p>
           <div className="flex flex-wrap gap-2">
             {suggestedQuestions.map((q, i) => (
@@ -194,7 +194,7 @@ export default function AIAssistant() {
       )}
 
       {/* Input */}
-      <div className="px-6 pb-6 pt-3 border-t border-gray-800 flex-shrink-0">
+      <div className="px-4 pb-4 pt-3 border-t border-gray-800 flex-shrink-0 sm:px-6 sm:pb-6">
         <form onSubmit={handleSubmit} className="flex gap-3">
           <input
             type="text"

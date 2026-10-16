@@ -72,12 +72,15 @@ export default function Survey() {
             {steps.map((step, i) => (
               <span
                 key={i}
-                className={`text-xs font-medium ${i <= currentStep ? 'text-violet-400' : 'text-gray-600'}`}
+                className={`hidden text-xs font-medium sm:inline ${i <= currentStep ? 'text-violet-400' : 'text-gray-600'}`}
               >
                 {step}
               </span>
             ))}
           </div>
+          <p className="mb-2 text-xs font-medium text-violet-400 sm:hidden">
+            {steps[currentStep]}
+          </p>
           <div className="w-full bg-gray-800 rounded-full h-2">
             <div
               className="bg-violet-600 h-2 rounded-full transition-all duration-500"
@@ -90,7 +93,7 @@ export default function Survey() {
         </div>
 
         {/* Step content */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 sm:p-8">
           <h2 className="text-white text-xl font-bold mb-6 flex items-center gap-2">
             {['📱', '📧', '🌐', '🔐', '⚙️'][currentStep]}
             {steps[currentStep]}
