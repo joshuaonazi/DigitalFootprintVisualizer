@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { chatWithAssistant } from '../services/claudeService'
 
 const suggestedQuestions = [
   'Why is my social media score so high?',
@@ -9,22 +10,38 @@ const suggestedQuestions = [
   'Is my data safe on WhatsApp?',
 ]
 
-const mockResponses = {
-  default: "That's a great question about your digital privacy. Once the AI Assistant is fully activated with your API key, I'll be able to give you a personalised answer based on your specific risk profile. For now, explore your dashboard and recommendations to get started!",
-}
-
 export default function AIAssistant() {
   const [messages, setMessages] = useState([
     {
       id: 1,
       role: 'assistant',
-      text: "Hi! I'm your Privacy Assistant 🔐 I'm here to help you understand your digital footprint and answer any questions about your privacy risk. What would you like to know?",
+      text: null, // will be set after riskProfile loads
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
+
+  const riskProfile = (() => {
+    try {
+      const stored = localStorage.getItem('riskResult')
+      return stored ? JSON.parse(stored) : null
+    } catch { return null }
+  })()
+
+  // Set personalized welcome message based on risk profile
+  useEffect(() => {
+    const welcome = riskProfile
+      ? `Hi! I'm your Privacy Assistant 🔐 I can see your overall risk score is ${riskProfile.overallScore}/100 (${riskProfile.riskTier} Risk), with your highest exposure in ${Object.entries(riskProfile.dimensions).sort((a,b) => b[1].score - a[1].score)[0][0].replace(/([A-Z])/g, ' $1').trim()}. Ask me anything about your digital footprint and I'll give you personalised advice!`
+      : "Hi! I'm your Privacy Assistant 🔐 I'm here to help you understand your digital footprint. Complete the survey first to get personalised advice based on your specific risk profile!"
+    setMessages([{
+      id: 1,
+      role: 'assistant',
+      text: welcome,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }])
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -44,18 +61,28 @@ export default function AIAssistant() {
     setInput('')
     setLoading(true)
 
-    // Simulate response delay — replace with Claude API call later
-    await new Promise(r => setTimeout(r, 1500))
+    try {
+      const allMessages = [...messages, userMsg]
+      const response = await chatWithAssistant(allMessages, riskProfile)
 
-    const assistantMsg = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      text: mockResponses.default,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const assistantMsg = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        text: response,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+      setMessages(prev => [...prev, assistantMsg])
+    } catch (err) {
+      const errorMsg = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        text: 'Sorry, I encountered an error. Please try again.',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+      setMessages(prev => [...prev, errorMsg])
+    } finally {
+      setLoading(false)
     }
-
-    setMessages(prev => [...prev, assistantMsg])
-    setLoading(false)
   }
 
   const handleSubmit = (e) => {
@@ -64,54 +91,60 @@ export default function AIAssistant() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 73px)' }}>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 73px)' }}>
 
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center">
-            <span className="text-xl">🤖</span>
-          </div>
-          <div>
-            <h1 className="text-white font-bold text-lg">Privacy Assistant</h1>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <p className="text-gray-500 text-xs">Online — ask me anything about your footprint</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center">
+              <span className="text-xl">🤖</span>
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-lg">Privacy Assistant</h1>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <p className="text-gray-500 text-xs">
+                  {riskProfile
+                    ? `Personalised for your ${riskProfile.riskTier} Risk profile`
+                    : 'Complete survey for personalised advice'}
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* Risk score badge */}
+          {riskProfile && (
+            <div className={`px-3 py-1.5 rounded-xl text-xs font-bold border
+              ${riskProfile.riskTier === 'Low' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                riskProfile.riskTier === 'Medium' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                riskProfile.riskTier === 'High' ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
+                'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+              Score: {riskProfile.overallScore} · {riskProfile.riskTier} Risk
+            </div>
+          )}
         </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-
         {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div className={`flex items-end gap-2 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-
-              {/* Avatar */}
               <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1
                 ${msg.role === 'assistant'
                   ? 'bg-violet-600/20 border border-violet-500/30'
-                  : 'bg-gray-700'
-                }`}
-              >
-                <span className="text-xs">
-                  {msg.role === 'assistant' ? '🤖' : '👤'}
-                </span>
+                  : 'bg-gray-700'}`}>
+                <span className="text-xs">{msg.role === 'assistant' ? '🤖' : '👤'}</span>
               </div>
-
-              {/* Bubble */}
               <div>
                 <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed
                   ${msg.role === 'assistant'
                     ? 'bg-gray-800 text-gray-200 rounded-tl-sm'
-                    : 'bg-violet-600 text-white rounded-tr-sm'
-                  }`}
-                >
+                    : 'bg-violet-600 text-white rounded-tr-sm'}`}>
                   {msg.text}
                 </div>
                 <p className={`text-xs text-gray-600 mt-1 ${msg.role === 'user' ? 'text-right' : ''}`}>
@@ -139,7 +172,6 @@ export default function AIAssistant() {
             </div>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -168,7 +200,7 @@ export default function AIAssistant() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your privacy risk..."
+            placeholder={riskProfile ? `Ask about your ${riskProfile.riskTier} Risk profile...` : 'Ask about digital privacy...'}
             disabled={loading}
             className="flex-1 bg-gray-800 text-white rounded-xl px-4 py-3 border border-gray-700 focus:outline-none focus:border-violet-500 placeholder-gray-600 text-sm disabled:opacity-50"
           />

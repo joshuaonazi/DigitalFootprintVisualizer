@@ -114,20 +114,38 @@ export async function chatWithAssistant(messages, riskProfile) {
   await delay(1500)
   const lastMessage = messages[messages.length - 1]?.text?.toLowerCase() || ''
 
-  if (lastMessage.includes('score') || lastMessage.includes('risk')) {
-    return 'Your overall risk score of 74 places you in the High risk tier. Your biggest vulnerability is your social media exposure — your public profile and frequent posting habits make you an easy target for social engineering attacks. I recommend starting with enabling 2FA on all your accounts as your first action.'
+  if (!riskProfile) {
+    return 'Please complete the survey first so I can give you personalised advice based on your specific risk profile!'
+  }
+
+  const highestDim = Object.entries(riskProfile.dimensions)
+    .sort((a, b) => b[1].score - a[1].score)[0]
+  const highestName = highestDim[0].replace(/([A-Z])/g, ' $1').trim()
+  const highestScore = highestDim[1].score
+
+  if (lastMessage.includes('score') || lastMessage.includes('risk') || lastMessage.includes('result')) {
+    return `Your overall risk score is ${riskProfile.overallScore}/100, placing you in the ${riskProfile.riskTier} Risk tier. Your highest exposure is in ${highestName} (${highestScore}/100) — ${highestDim[1].topRisk}. I recommend starting with the recommendations page to see your prioritised action plan.`
+  }
+  if (lastMessage.includes('social media') || lastMessage.includes('instagram') || lastMessage.includes('facebook') || lastMessage.includes('twitter')) {
+    return `Your Social Media score is ${riskProfile.dimensions.socialMedia.score}/100. ${riskProfile.dimensions.socialMedia.topRisk}. The most impactful fix is switching all your profiles to private — this alone could reduce your score by around 14-15 points. Also review which third-party apps have access to your social accounts.`
+  }
+  if (lastMessage.includes('password') || lastMessage.includes('security')) {
+    return `Your Security score is ${riskProfile.dimensions.security.score}/100. ${riskProfile.dimensions.security.topRisk}. I strongly recommend installing Bitwarden (free) as a password manager and enabling 2FA on all your accounts. These two actions together could reduce your overall score by about 32 points.`
   }
   if (lastMessage.includes('2fa') || lastMessage.includes('two-factor') || lastMessage.includes('authentication')) {
-    return 'To enable 2FA on Google, go to myaccount.google.com → Security → 2-Step Verification. For Instagram, go to Settings → Security → Two-Factor Authentication. Using an authenticator app like Google Authenticator is more secure than SMS verification.'
-  }
-  if (lastMessage.includes('password')) {
-    return 'Password reuse is one of your highest risk behaviors. I recommend downloading Bitwarden — it is completely free and generates unique strong passwords for every account. Once installed, prioritize updating your email, banking, and social media passwords first.'
-  }
-  if (lastMessage.includes('social media') || lastMessage.includes('instagram') || lastMessage.includes('facebook')) {
-    return 'Your social media score of 88 is your highest risk dimension. The most impactful change is switching all your profiles to private — this prevents data brokers and potential attackers from harvesting your personal information. Also review which third-party apps have access to your social accounts.'
+    return `To enable 2FA: on Google go to myaccount.google.com → Security → 2-Step Verification. On Instagram go to Settings → Security → Two-Factor Authentication. Use an authenticator app rather than SMS — it\'s more secure. Your Security score is currently ${riskProfile.dimensions.security.score}/100, so this will make a significant difference.`
   }
   if (lastMessage.includes('cookie') || lastMessage.includes('browsing') || lastMessage.includes('browser')) {
-    return 'Your browsing habits contribute significantly to your passive digital footprint. Installing uBlock Origin on your browser will automatically block most trackers. Also consider switching to Firefox which has Enhanced Tracking Protection built in by default.'
+    return `Your Browsing score is ${riskProfile.dimensions.browsing.score}/100. ${riskProfile.dimensions.browsing.topRisk}. Install uBlock Origin on your browser to block trackers automatically. Also go to your browser settings and enable automatic cookie clearing when you close the browser. Firefox has Enhanced Tracking Protection built in by default.`
   }
-  return 'That is a great question about your digital privacy. Based on your risk profile, your most urgent priorities are enabling two-factor authentication, setting your social media to private, and using a password manager. Would you like specific steps for any of these actions?'
+  if (lastMessage.includes('email')) {
+    return `Your Email score is ${riskProfile.dimensions.email.score}/100. ${riskProfile.dimensions.email.topRisk}. Create a separate Gmail or ProtonMail account for newsletters, shopping, and non-essential sign-ups. Keep your primary email only for banking, university, and important accounts. This reduces your trackable digital footprint significantly.`
+  }
+  if (lastMessage.includes('recommend') || lastMessage.includes('improve') || lastMessage.includes('reduce')) {
+    return `Based on your ${riskProfile.riskTier} Risk profile (score: ${riskProfile.overallScore}), your top 3 priorities are: 1) Enable 2FA on all accounts (-18 pts), 2) Set social media to private (-15 pts), 3) Use a password manager (-14 pts). Completing these three actions alone would drop your score by approximately 47 points. Check the Recommendations page for step-by-step guides.`
+  }
+  if (lastMessage.includes('what is') || lastMessage.includes('explain') || lastMessage.includes('passive') || lastMessage.includes('footprint')) {
+    return `A digital footprint is the trail of data you leave online. Active footprints are things you deliberately post — photos, comments, sign-up forms. Passive footprints are collected without your direct input — IP addresses, cookies, location data from apps running in the background. Your survey revealed ${riskProfile.topThreats[0].toLowerCase()}.`
+  }
+  return `Based on your ${riskProfile.riskTier} Risk score of ${riskProfile.overallScore}/100, your most urgent area is ${highestName} (score: ${highestScore}). ${highestDim[1].topRisk}. Would you like specific steps to improve this area, or do you have a question about another part of your risk profile?`
 }
