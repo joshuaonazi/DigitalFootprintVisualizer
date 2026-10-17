@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 const questions = [
   {
@@ -125,12 +124,11 @@ const questions = [
 ]
 
 export default function Quiz() {
-  const [phase, setPhase] = useState('intro') // intro | quiz | results
+  const [phase, setPhase] = useState('intro')
   const [currentQ, setCurrentQ] = useState(0)
   const [selected, setSelected] = useState(null)
   const [answers, setAnswers] = useState([])
   const [showExplanation, setShowExplanation] = useState(false)
-  const navigate = useNavigate()
 
   const handleAnswer = (index) => {
     if (selected !== null) return
@@ -152,20 +150,41 @@ export default function Quiz() {
     if (currentQ + 1 < questions.length) {
       setCurrentQ(currentQ + 1)
     } else {
-      const score = newAnswers.filter(a => a.isCorrect).length
+      const newScore = newAnswers.filter(a => a.isCorrect).length
+      const newPercentage = Math.round((newScore / questions.length) * 100)
+
+      // Save current score as previous before overwriting
+      const existingScore = localStorage.getItem('quizScore')
+      if (existingScore) {
+        try {
+          localStorage.setItem('previousQuizScore', existingScore)
+        } catch {}
+      }
+
+      // Save new score
       localStorage.setItem('quizScore', JSON.stringify({
-        score,
+        score: newScore,
         total: questions.length,
-        percentage: Math.round((score / questions.length) * 100),
+        percentage: newPercentage,
         answers: newAnswers,
       }))
+
       setPhase('results')
     }
+  }
+
+  const resetQuiz = () => {
+    setPhase('intro')
+    setCurrentQ(0)
+    setAnswers([])
+    setSelected(null)
+    setShowExplanation(false)
   }
 
   const score = answers.filter(a => a.isCorrect).length
   const percentage = Math.round((score / questions.length) * 100)
 
+  // ─── INTRO ─────────────────────────────────────────────
   if (phase === 'intro') {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -174,9 +193,7 @@ export default function Quiz() {
             <div className="w-16 h-16 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-6">
               <span className="text-3xl">📝</span>
             </div>
-            <h1 className="text-white text-2xl font-bold mb-2">
-              Privacy Awareness Quiz
-            </h1>
+            <h1 className="text-white text-2xl font-bold mb-2">Privacy Awareness Quiz</h1>
             <p className="text-gray-400 text-sm mb-6">
               Test your digital privacy knowledge with 10 questions. This helps measure how much your awareness improves after using the DFV dashboard.
             </p>
@@ -204,6 +221,7 @@ export default function Quiz() {
     )
   }
 
+  // ─── RESULTS ───────────────────────────────────────────
   if (phase === 'results') {
     const grade =
       percentage >= 80 ? { label: 'Excellent', color: '#10b981', icon: '🏆' } :
@@ -211,9 +229,20 @@ export default function Quiz() {
       percentage >= 40 ? { label: 'Fair', color: '#f97316', icon: '📚' } :
                          { label: 'Needs Work', color: '#ef4444', icon: '💪' }
 
+    const previousScore = (() => {
+      try {
+        const stored = localStorage.getItem('previousQuizScore')
+        return stored ? JSON.parse(stored) : null
+      } catch { return null }
+    })()
+
+    const improvement = previousScore ? percentage - previousScore.percentage : null
+
     return (
       <div className="min-h-screen bg-gray-950 px-4 py-10">
         <div className="max-w-lg mx-auto">
+
+          {/* Score card */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center mb-6">
             <p className="text-5xl mb-4">{grade.icon}</p>
             <h1 className="text-white text-2xl font-bold mb-1">Quiz Complete!</h1>
@@ -226,18 +255,97 @@ export default function Quiz() {
                 {percentage}%
               </p>
               <p className="text-white font-semibold">{grade.label}</p>
-              <p className="text-gray-400 text-sm mt-1">
-                {score} out of {questions.length} correct
-              </p>
+              <p className="text-gray-400 text-sm mt-1">{score} out of {questions.length} correct</p>
             </div>
             <p className="text-gray-500 text-sm">
-              {percentage >= 80
-                ? 'Outstanding privacy awareness! Keep up the great work.'
-                : percentage >= 60
-                ? 'Good foundation. Review the explanations to strengthen your knowledge.'
-                : 'Keep learning! The DFV dashboard and recommendations will help improve your privacy knowledge.'}
+              {percentage >= 80 ? 'Outstanding privacy awareness! Keep up the great work.' :
+               percentage >= 60 ? 'Good foundation. Review the explanations to strengthen your knowledge.' :
+               'Keep learning! The DFV dashboard and recommendations will help improve your privacy knowledge.'}
             </p>
           </div>
+
+          {/* Pre/Post Comparison Card */}
+          {previousScore && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
+              <h2 className="text-white font-bold text-lg mb-4">📈 Awareness Improvement</h2>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-gray-800 rounded-xl p-4 text-center">
+                  <p className="text-gray-500 text-xs mb-1">Before DFV</p>
+                  <p className="text-3xl font-black text-gray-400">{previousScore.percentage}%</p>
+                  <p className="text-gray-600 text-xs">{previousScore.score}/{questions.length}</p>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <p className={`text-2xl font-black ${improvement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {improvement >= 0 ? '+' : ''}{improvement}%
+                  </p>
+                  <p className="text-gray-600 text-xs">change</p>
+                  <p className="text-gray-700 text-lg mt-1">→</p>
+                </div>
+                <div
+                  className="rounded-xl p-4 text-center border"
+                  style={{ backgroundColor: `${grade.color}15`, borderColor: `${grade.color}40` }}
+                >
+                  <p className="text-gray-500 text-xs mb-1">After DFV</p>
+                  <p className="text-3xl font-black" style={{ color: grade.color }}>{percentage}%</p>
+                  <p className="text-gray-600 text-xs">{score}/{questions.length}</p>
+                </div>
+              </div>
+
+              {/* Dual progress bar */}
+              <div className="mb-3">
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                </div>
+                <div className="relative w-full bg-gray-800 rounded-full h-4">
+                  <div
+                    className="absolute top-0 left-0 h-4 rounded-full bg-gray-600 transition-all duration-700"
+                    style={{ width: `${previousScore.percentage}%` }}
+                  />
+                  <div
+                    className="absolute top-0 left-0 h-4 rounded-full transition-all duration-700"
+                    style={{ width: `${percentage}%`, backgroundColor: grade.color, opacity: 0.7 }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs mt-1">
+                  <span className="text-gray-500">Before: {previousScore.percentage}%</span>
+                  <span style={{ color: grade.color }}>After: {percentage}%</span>
+                </div>
+              </div>
+
+              {improvement > 0 && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-center">
+                  <p className="text-emerald-400 text-sm font-semibold">
+                    🎉 Your awareness improved by {improvement} percentage points after using DFV!
+                  </p>
+                </div>
+              )}
+              {improvement === 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-center">
+                  <p className="text-amber-400 text-sm font-semibold">
+                    Your score stayed the same — keep exploring the dashboard!
+                  </p>
+                </div>
+              )}
+              {improvement < 0 && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-center">
+                  <p className="text-red-400 text-sm font-semibold">
+                    Score dropped slightly — review the explanations and try again!
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Baseline message */}
+          {!previousScore && (
+            <div className="bg-violet-600/10 border border-violet-500/30 rounded-2xl p-5 mb-6 text-center">
+              <p className="text-violet-400 text-sm font-semibold mb-1">📌 This is your baseline score</p>
+              <p className="text-gray-400 text-sm">
+                Explore the DFV dashboard and recommendations, then retake the quiz to see how much your awareness improves!
+              </p>
+            </div>
+          )}
 
           {/* Answer Review */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
@@ -247,28 +355,19 @@ export default function Quiz() {
                 <div
                   key={i}
                   className={`flex items-start gap-3 p-3 rounded-xl border
-                    ${ans.isCorrect
-                      ? 'bg-emerald-500/5 border-emerald-500/20'
-                      : 'bg-red-500/5 border-red-500/20'
-                    }`}
+                    ${ans.isCorrect ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}
                 >
-                  <span className="text-lg flex-shrink-0">
-                    {ans.isCorrect ? '✅' : '❌'}
-                  </span>
+                  <span className="text-lg flex-shrink-0">{ans.isCorrect ? '✅' : '❌'}</span>
                   <p className="text-gray-300 text-sm">{ans.question}</p>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Buttons — only ONE Retake Quiz */}
           <div className="flex gap-3">
             <button
-              onClick={() => {
-                setPhase('intro')
-                setCurrentQ(0)
-                setAnswers([])
-                setSelected(null)
-              }}
+              onClick={resetQuiz}
               className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-xl transition-colors"
             >
               Retake Quiz
@@ -280,56 +379,41 @@ export default function Quiz() {
               Back to Dashboard
             </button>
           </div>
+
         </div>
       </div>
     )
   }
 
+  // ─── QUIZ ──────────────────────────────────────────────
   const q = questions[currentQ]
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-10">
       <div className="max-w-2xl mx-auto">
-
-        {/* Progress */}
         <div className="mb-6">
           <div className="flex justify-between mb-2">
-            <span className="text-gray-500 text-sm">
-              Question {currentQ + 1} of {questions.length}
-            </span>
-            <span className="text-violet-400 text-sm font-medium">
-              {answers.filter(a => a.isCorrect).length} correct so far
-            </span>
+            <span className="text-gray-500 text-sm">Question {currentQ + 1} of {questions.length}</span>
+            <span className="text-violet-400 text-sm font-medium">{answers.filter(a => a.isCorrect).length} correct so far</span>
           </div>
           <div className="w-full bg-gray-800 rounded-full h-2">
             <div
               className="bg-violet-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${((currentQ) / questions.length) * 100}%` }}
+              style={{ width: `${(currentQ / questions.length) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Question Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-4">
-          <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-3">
-            Question {currentQ + 1}
-          </p>
-          <h2 className="text-white text-xl font-bold mb-6 leading-snug">
-            {q.question}
-          </h2>
-
-          {/* Options */}
+          <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-3">Question {currentQ + 1}</p>
+          <h2 className="text-white text-xl font-bold mb-6 leading-snug">{q.question}</h2>
           <div className="space-y-3">
             {q.options.map((option, i) => {
               let style = 'bg-gray-800 border-gray-700 text-gray-300 hover:border-violet-500 hover:text-white'
               if (selected !== null) {
-                if (i === q.correct) {
-                  style = 'bg-emerald-500/10 border-emerald-500 text-emerald-300'
-                } else if (i === selected && selected !== q.correct) {
-                  style = 'bg-red-500/10 border-red-500 text-red-300'
-                } else {
-                  style = 'bg-gray-800 border-gray-700 text-gray-500 opacity-50'
-                }
+                if (i === q.correct) style = 'bg-emerald-500/10 border-emerald-500 text-emerald-300'
+                else if (i === selected && selected !== q.correct) style = 'bg-red-500/10 border-red-500 text-red-300'
+                else style = 'bg-gray-800 border-gray-700 text-gray-500 opacity-50'
               }
               return (
                 <button
@@ -338,16 +422,12 @@ export default function Quiz() {
                   disabled={selected !== null}
                   className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-colors ${style}`}
                 >
-                  <span className="font-bold mr-2 opacity-60">
-                    {['A', 'B', 'C', 'D'][i]}.
-                  </span>
+                  <span className="font-bold mr-2 opacity-60">{['A', 'B', 'C', 'D'][i]}.</span>
                   {option}
                 </button>
               )
             })}
           </div>
-
-          {/* Explanation */}
           {showExplanation && (
             <div className="mt-4 p-4 rounded-xl bg-gray-800 border border-gray-700">
               <p className="text-gray-400 text-xs font-semibold uppercase mb-1">
@@ -358,7 +438,6 @@ export default function Quiz() {
           )}
         </div>
 
-        {/* Next Button */}
         {selected !== null && (
           <button
             onClick={handleNext}

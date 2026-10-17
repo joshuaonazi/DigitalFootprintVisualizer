@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-const mockRecommendations = [
+const defaultRecommendations = [
   {
     id: 1,
     title: 'Enable Two-Factor Authentication',
@@ -51,7 +51,7 @@ const mockRecommendations = [
   },
   {
     id: 4,
-    title: 'Review App Permissions',
+    title: 'Review and Restrict App Permissions',
     description: 'Many apps collect far more data than they need. Review which apps have access to your location, microphone, camera, and contacts.',
     impact: 'Medium',
     estimatedScoreReduction: 10,
@@ -106,11 +106,29 @@ const impactColors = {
 }
 
 export default function Recommendations() {
-  const [recs, setRecs] = useState(mockRecommendations)
+  const [recs, setRecs] = useState(defaultRecommendations)
   const [expanded, setExpanded] = useState(null)
   const [filter, setFilter] = useState('All')
+  const [animateScore, setAnimateScore] = useState(false)
+
+  const currentScore = (() => {
+    try {
+      const stored = localStorage.getItem('riskResult')
+      return stored ? JSON.parse(stored).overallScore : 74
+    } catch { return 74 }
+  })()
+
+  const completedReduction = recs
+    .filter(r => r.completed)
+    .reduce((sum, r) => sum + r.estimatedScoreReduction, 0)
+
+  const projectedScore = Math.max(0, currentScore - completedReduction)
+
+  const completed = recs.filter(r => r.completed).length
 
   const toggleComplete = (id) => {
+    setAnimateScore(true)
+    setTimeout(() => setAnimateScore(false), 600)
     setRecs(recs.map(r => r.id === id ? { ...r, completed: !r.completed } : r))
   }
 
@@ -118,13 +136,22 @@ export default function Recommendations() {
     setExpanded(expanded === id ? null : id)
   }
 
-  const completed = recs.filter(r => r.completed).length
-  const totalReduction = recs
-    .filter(r => r.completed)
-    .reduce((sum, r) => sum + r.estimatedScoreReduction, 0)
-
   const categories = ['All', 'Security', 'Social Media', 'Email', 'Browsing', 'Platform Privacy']
   const filtered = filter === 'All' ? recs : recs.filter(r => r.category === filter)
+
+  const tierColor = (score) => {
+    if (score <= 30) return 'text-emerald-400'
+    if (score <= 60) return 'text-amber-400'
+    if (score <= 80) return 'text-orange-400'
+    return 'text-red-400'
+  }
+
+  const tierLabel = (score) => {
+    if (score <= 30) return 'Low Risk'
+    if (score <= 60) return 'Medium Risk'
+    if (score <= 80) return 'High Risk'
+    return 'Critical Risk'
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-10">
@@ -133,34 +160,83 @@ export default function Recommendations() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-white text-3xl font-bold mb-2">Privacy Recommendations</h1>
-          <p className="text-gray-400">Personalised actions to reduce your digital footprint risk.</p>
+          <p className="text-gray-400">Check off completed actions to see your projected score improve in real time.</p>
         </div>
 
-        {/* Progress Card */}
+        {/* Score Simulator Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Checklist Progress</p>
-              <p className="text-white text-2xl font-bold">{completed}/{recs.length} completed</p>
+          <h2 className="text-white font-bold text-lg mb-4">📊 Score Improvement Simulator</h2>
+          <div className="grid grid-cols-3 gap-4 mb-4">
+
+            {/* Current Score */}
+            <div className="bg-gray-800 rounded-xl p-4 text-center">
+              <p className="text-gray-500 text-xs mb-1">Current Score</p>
+              <p className={`text-3xl font-black ${tierColor(currentScore)}`}>
+                {currentScore}
+              </p>
+              <p className={`text-xs font-medium ${tierColor(currentScore)}`}>
+                {tierLabel(currentScore)}
+              </p>
             </div>
-            <div className="text-right">
-              <p className="text-gray-400 text-sm mb-1">Estimated Score Reduction</p>
-              <p className="text-emerald-400 text-2xl font-bold">-{totalReduction} pts</p>
+
+            {/* Arrow */}
+            <div className="flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-emerald-400 text-2xl font-black">
+                  -{completedReduction}
+                </p>
+                <p className="text-gray-600 text-xs">pts reduction</p>
+                <p className="text-gray-700 text-lg mt-1">→</p>
+              </div>
+            </div>
+
+            {/* Projected Score */}
+            <div className={`rounded-xl p-4 text-center border transition-all duration-500
+              ${completedReduction > 0
+                ? 'bg-violet-600/10 border-violet-500/30'
+                : 'bg-gray-800 border-transparent'}`}>
+              <p className="text-gray-500 text-xs mb-1">Projected Score</p>
+              <p className={`text-3xl font-black transition-all duration-500 ${animateScore ? 'scale-125' : 'scale-100'} ${tierColor(projectedScore)}`}>
+                {projectedScore}
+              </p>
+              <p className={`text-xs font-medium ${tierColor(projectedScore)}`}>
+                {tierLabel(projectedScore)}
+              </p>
             </div>
           </div>
-          <div className="w-full bg-gray-800 rounded-full h-3">
-            <div
-              className="bg-violet-600 h-3 rounded-full transition-all duration-500"
-              style={{ width: `${(completed / recs.length) * 100}%` }}
-            />
+
+          {/* Progress bar */}
+          <div className="mb-3">
+            <div className="flex justify-between mb-1">
+              <span className="text-gray-500 text-xs">{completed}/{recs.length} actions completed</span>
+              <span className="text-emerald-400 text-xs font-bold">
+                {completedReduction > 0 ? `-${completedReduction} points saved` : 'Complete actions to reduce your score'}
+              </span>
+            </div>
+            <div className="w-full bg-gray-800 rounded-full h-2">
+              <div
+                className="bg-violet-600 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${(completed / recs.length) * 100}%` }}
+              />
+            </div>
           </div>
-          <p className="text-gray-500 text-xs mt-2">
-            {completed === 0
-              ? 'Start completing actions to improve your privacy score'
-              : completed === recs.length
-              ? '🎉 All actions completed! Your privacy is significantly improved.'
-              : `Keep going — ${recs.length - completed} actions remaining`}
-          </p>
+
+          {/* Tier change alert */}
+          {completedReduction > 0 && tierLabel(projectedScore) !== tierLabel(currentScore) && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-center">
+              <p className="text-emerald-400 text-sm font-semibold">
+                🎉 These actions would move you from {tierLabel(currentScore)} to {tierLabel(projectedScore)}!
+              </p>
+            </div>
+          )}
+
+          {completed === recs.length && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-center mt-2">
+              <p className="text-emerald-400 text-sm font-semibold">
+                🏆 All actions completed! Your privacy is significantly improved.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Filter tabs */}
@@ -192,10 +268,8 @@ export default function Recommendations() {
                 className={`bg-gray-900 border rounded-2xl overflow-hidden transition-all duration-200
                   ${rec.completed ? 'border-emerald-500/30 opacity-75' : 'border-gray-800'}`}
               >
-                {/* Card Header */}
                 <div className="p-5">
                   <div className="flex items-start gap-4">
-                    {/* Checkbox */}
                     <button
                       onClick={() => toggleComplete(rec.id)}
                       className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-1 transition-colors
@@ -207,7 +281,6 @@ export default function Recommendations() {
                       {rec.completed && <span className="text-white text-xs">✓</span>}
                     </button>
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-lg">{rec.icon}</span>
@@ -216,8 +289,6 @@ export default function Recommendations() {
                         </h3>
                       </div>
                       <p className="text-gray-400 text-sm mb-3">{rec.description}</p>
-
-                      {/* Tags */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${impact.bg} ${impact.border} ${impact.text}`}>
                           {rec.impact} Impact
@@ -231,7 +302,6 @@ export default function Recommendations() {
                       </div>
                     </div>
 
-                    {/* Expand button */}
                     <button
                       onClick={() => toggleExpand(rec.id)}
                       className="text-gray-500 hover:text-white transition-colors flex-shrink-0"
@@ -241,7 +311,6 @@ export default function Recommendations() {
                   </div>
                 </div>
 
-                {/* Expanded steps */}
                 {isExpanded && (
                   <div className="border-t border-gray-800 px-5 py-4 bg-gray-800/50">
                     <p className="text-gray-300 text-sm font-semibold mb-3">How to do it:</p>
