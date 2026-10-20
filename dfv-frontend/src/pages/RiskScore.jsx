@@ -50,7 +50,7 @@ export default function RiskScore() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-white text-3xl font-bold mb-2">Your Risk Analysis</h1>
-          <p className="text-gray-400">Powered by Claude AI</p>
+          <p className="text-gray-400">Your personalised privacy analysis</p>
         </div>
 
         {/* Overall Score Card */}

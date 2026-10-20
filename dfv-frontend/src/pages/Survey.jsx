@@ -31,7 +31,7 @@ export default function Survey() {
       navigate('/risk')
     } catch (err) {
       console.error('Claude error:', err)
-      alert('Something went wrong. Check your API key in .env')
+      alert('Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -115,7 +115,7 @@ export default function Survey() {
             className="px-8 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold transition-colors"
           >
             {currentStep === steps.length - 1
-              ? (submitting ? 'Analysing with Claude AI...' : 'Submit Survey ✓')
+              ? (submitting ? 'Analysing your responses...' : 'Submit Survey ✓')
             : 'Next →'}
           </button>
         </div>
