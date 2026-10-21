@@ -1,0 +1,159 @@
+require('dotenv').config()
+const express = require('express')
+const cors = require('cors')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
+const { Pool } = require('pg')
+
+const app = express()
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',')
+app.use(cors({ origin: allowedOrigins }))
+app.use(express.json())
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+})
+
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      full_name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      student_id TEXT,
+      faculty TEXT,
+      password_hash TEXT NOT NULL,
+      consent_given BOOLEAN NOT NULL DEFAULT FALSE,
+      consent_at TIMESTAMPTZ,
+      role TEXT NOT NULL DEFAULT 'student',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS survey_responses (
+      id BIGSERIAL PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      answers JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS risk_results (
+      id BIGSERIAL PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      survey_id BIGINT REFERENCES survey_responses(id) ON DELETE SET NULL,
+      overall_score INT NOT NULL,
+      risk_tier TEXT NOT NULL,
+      dimensions JSONB NOT NULL,
+      top_threats JSONB,
+      summary TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS quiz_results (
+      id BIGSERIAL PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      phase TEXT NOT NULL CHECK (phase IN ('pre', 'post')),
+      score INT NOT NULL,
+      total INT NOT NULL,
+      percentage INT NOT NULL,
+      answers JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+}
+
+const signToken = (user) =>
+  jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' })
+
+const publicUser = (u) => ({
+  id: u.id,
+  fullName: u.full_name,
+  email: u.email,
+  studentId: u.student_id,
+  faculty: u.faculty,
+  consentGiven: u.consent_given,
+  role: u.role,
+})
+
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization || ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  if (!token) return res.status(401).json({ error: 'Not signed in' })
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET)
+    next()
+  } catch {
+    res.status(401).json({ error: 'Session expired. Please sign in again.' })
+  }
+}
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT NOW() AS time')
+    res.json({ status: 'ok', dbTime: r.rows[0].time })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ status: 'error', message: 'Database connection failed' })
+  }
+})
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { fullName, email, studentId, faculty, password } = req.body || {}
+    if (!fullName || !email || !password)
+      return res.status(400).json({ error: 'Name, email and password are required' })
+    if (!/^\S+@\S+\.\S+$/.test(email))
+      return res.status(400).json({ error: 'Enter a valid email address' })
+    if (password.length < 8)
+      return res.status(400).json({ error: 'Password must be at least 8 characters' })
+
+    const hash = await bcrypt.hash(password, 12)
+    const r = await pool.query(
+      `INSERT INTO users (full_name, email, student_id, faculty, password_hash)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [fullName.trim(), email.trim().toLowerCase(), studentId || null, faculty || null, hash]
+    )
+    const user = r.rows[0]
+    res.status(201).json({ token: signToken(user), user: publicUser(user) })
+  } catch (err) {
+    if (err.code === '23505')
+      return res.status(409).json({ error: 'An account with this email already exists' })
+    console.error(err)
+    res.status(500).json({ error: 'Registration failed' })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {}
+    if (!email || !password)
+      return res.status(400).json({ error: 'Email and password are required' })
+    const r = await pool.query('SELECT * FROM users WHERE email = $1', [email.trim().toLowerCase()])
+    const user = r.rows[0]
+    const ok = user && (await bcrypt.compare(password, user.password_hash))
+    if (!ok) return res.status(401).json({ error: 'Incorrect email or password' })
+    res.json({ token: signToken(user), user: publicUser(user) })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Login failed' })
+  }
+})
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.sub])
+  if (!r.rows[0]) return res.status(404).json({ error: 'User not found' })
+  res.json({ user: publicUser(r.rows[0]) })
+})
+
+app.post('/api/auth/consent', requireAuth, async (req, res) => {
+  const r = await pool.query(
+    'UPDATE users SET consent_given = TRUE, consent_at = NOW() WHERE id = $1 RETURNING *',
+    [req.user.sub]
+  )
+  res.json({ user: publicUser(r.rows[0]) })
+})
+
+const PORT = process.env.PORT || 5000
+initDb()
+  .then(() => app.listen(PORT, () => console.log(`DFV API running on port ${PORT}`)))
+  .catch((err) => {
+    console.error('Could not start. Database error:', err.message)
+    process.exit(1)
+  })
