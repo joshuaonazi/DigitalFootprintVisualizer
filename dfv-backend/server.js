@@ -12,7 +12,6 @@ app.use(express.json())
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
 })
 
 async function initDb() {
@@ -149,6 +148,92 @@ app.post('/api/auth/consent', requireAuth, async (req, res) => {
   )
   res.json({ user: publicUser(r.rows[0]) })
 })
+
+// Next: endpoints for survey, risk results and quiz scores
+const wrap = (fn) => (req, res) =>
+  fn(req, res).catch((err) => {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  })
+
+const TIERS = ['Low', 'Medium', 'High', 'Critical']
+
+const riskShape = (r) =>
+  r && {
+    overallScore: r.overall_score,
+    riskTier: r.risk_tier,
+    dimensions: r.dimensions,
+    topThreats: r.top_threats,
+    summary: r.summary,
+    createdAt: r.created_at,
+  }
+
+const quizShape = (q) =>
+  q && { score: q.score, total: q.total, percentage: q.percentage, phase: q.phase, createdAt: q.created_at }
+
+app.post('/api/survey', requireAuth, wrap(async (req, res) => {
+  const { answers } = req.body || {}
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers))
+    return res.status(400).json({ error: 'Survey answers are required' })
+  const r = await pool.query(
+    'INSERT INTO survey_responses (user_id, answers) VALUES ($1, $2) RETURNING id',
+    [req.user.sub, JSON.stringify(answers)]
+  )
+  res.status(201).json({ surveyId: r.rows[0].id })
+}))
+
+app.post('/api/risk', requireAuth, wrap(async (req, res) => {
+  const { surveyId, overallScore, riskTier, dimensions, topThreats, summary } = req.body || {}
+  if (!Number.isFinite(overallScore) || overallScore < 0 || overallScore > 100 ||
+      !TIERS.includes(riskTier) || !dimensions || typeof dimensions !== 'object')
+    return res.status(400).json({ error: 'Incomplete or invalid risk result' })
+  const r = await pool.query(
+    `INSERT INTO risk_results (user_id, survey_id, overall_score, risk_tier, dimensions, top_threats, summary)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [req.user.sub, surveyId || null, Math.round(overallScore), riskTier,
+     JSON.stringify(dimensions), JSON.stringify(topThreats || []), summary || null]
+  )
+  res.status(201).json({ risk: riskShape(r.rows[0]) })
+}))
+
+app.get('/api/risk/latest', requireAuth, wrap(async (req, res) => {
+  const r = await pool.query(
+    'SELECT * FROM risk_results WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [req.user.sub])
+  res.json({ risk: riskShape(r.rows[0]) || null })
+}))
+
+// First quiz a student takes is their 'pre' (baseline); later attempts are 'post'
+app.post('/api/quiz', requireAuth, wrap(async (req, res) => {
+  const { score, total, answers } = req.body || {}
+  if (!Number.isInteger(score) || !Number.isInteger(total) || total <= 0 || score < 0 || score > total)
+    return res.status(400).json({ error: 'Invalid quiz score' })
+  const existing = await pool.query(
+    "SELECT 1 FROM quiz_results WHERE user_id = $1 AND phase = 'pre' LIMIT 1", [req.user.sub])
+  const phase = existing.rowCount === 0 ? 'pre' : 'post'
+  const r = await pool.query(
+    `INSERT INTO quiz_results (user_id, phase, score, total, percentage, answers)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [req.user.sub, phase, score, total, Math.round((score / total) * 100),
+     JSON.stringify(answers || [])]
+  )
+  res.status(201).json({ quiz: quizShape(r.rows[0]) })
+}))
+
+app.get('/api/me/summary', requireAuth, wrap(async (req, res) => {
+  const u = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.sub])
+  if (!u.rows[0]) return res.status(404).json({ error: 'User not found' })
+  const risk = await pool.query(
+    'SELECT * FROM risk_results WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [req.user.sub])
+  const pre = await pool.query(
+    "SELECT * FROM quiz_results WHERE user_id = $1 AND phase = 'pre' ORDER BY created_at ASC LIMIT 1", [req.user.sub])
+  const post = await pool.query(
+    "SELECT * FROM quiz_results WHERE user_id = $1 AND phase = 'post' ORDER BY created_at DESC LIMIT 1", [req.user.sub])
+  res.json({
+    user: publicUser(u.rows[0]),
+    risk: riskShape(risk.rows[0]) || null,
+    quiz: { pre: quizShape(pre.rows[0]) || null, post: quizShape(post.rows[0]) || null },
+  })
+}))
 
 const PORT = process.env.PORT || 5000
 initDb()
