@@ -4,8 +4,12 @@ const cors = require('cors')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { Pool } = require('pg')
+const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
 
 const app = express()
+app.set('trust proxy', 1) // the host sits behind a proxy
+app.use(helmet())
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',')
 app.use(cors({ origin: allowedOrigins }))
 app.use(express.json())
@@ -119,8 +123,14 @@ app.post('/api/auth/register', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
-  try {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 50,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many failed attempts. Try again in 15 minutes.' },
+})
+
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { email, password } = req.body || {}
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password are required' })
